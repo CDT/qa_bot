@@ -1,16 +1,14 @@
 # API
 
-All endpoints are JSON over HTTP. Authentication is out of scope for v1.
+JSON over HTTP, served by a single Node process. **No authentication** — personal single-user tool on localhost.
 
-Paths under `{path}` are URL-encoded relative paths within the KB root (e.g. `guides%2Fsetup.md`). Writes that would escape the KB root (`..`, absolute paths) are rejected.
+Paths under `{path}` are URL-encoded relative paths within the KB root (e.g. `guides%2Fsetup.md`). Requests that would escape the KB root (`..`, absolute paths) are rejected with `400`.
 
 ## Knowledge Base
 
 ### `GET /api/kb/files`
 
 List all KB files.
-
-Response:
 
 ```json
 {
@@ -22,10 +20,6 @@ Response:
 
 ### `GET /api/kb/files/{path}`
 
-Return the raw markdown of a file.
-
-Response:
-
 ```json
 {
   "path": "guides/setup.md",
@@ -36,7 +30,7 @@ Response:
 
 ### `PUT /api/kb/files/{path}`
 
-Create or update a file. Rejects content exceeding 10,000 Chinese characters with `413 Payload Too Large`.
+Create or update. Rejects content exceeding 10,000 Chinese characters with `413 Payload Too Large`.
 
 Request:
 
@@ -46,7 +40,7 @@ Request:
 
 ### `DELETE /api/kb/files/{path}`
 
-Delete a file. Idempotent — deleting a missing file returns `204`.
+Delete. Idempotent — deleting a missing file returns `204`.
 
 ## Chat
 
@@ -73,22 +67,14 @@ Stream events:
 
 ## Configuration
 
-### `GET /api/config/model`
+No runtime config API. Provider, model, and credentials are supplied via environment variables at start time:
 
-Return the active provider and model.
-
-Response:
-
-```json
-{ "provider": "deepseek", "model": "deepseek-chat" }
+```
+LLM_BASE_URL=https://api.deepseek.com   # any OpenAI-compatible endpoint
+LLM_MODEL=deepseek-chat
+LLM_API_KEY=sk-...
+KB_DIR=./kb
+PORT=3000
 ```
 
-### `PUT /api/config/model`
-
-Switch provider / model. Credentials are supplied via environment variables, not this endpoint.
-
-Request:
-
-```json
-{ "provider": "deepseek", "model": "deepseek-chat" }
-```
+Restart the Node process to change them.

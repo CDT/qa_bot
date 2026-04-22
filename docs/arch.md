@@ -1,19 +1,21 @@
 # Architecture
 
-## Components
+## Guiding principle
 
-### Backend
+Personal internal tool — optimize for the smallest number of obvious moving parts. **One Node process** serves the API and the static frontend. No containers, no auxiliary services, no orchestration.
 
-- **KB Service** — CRUD on markdown files on disk. Owns the KB directory and the derived index (filename + first heading).
-- **LLM Gateway** — Provider-agnostic chat / tool-use interface. Swappable adapters: DeepSeek (default), OpenAI, Anthropic, local (e.g. Ollama). All providers are used through the same internal API.
-- **Retrieval Orchestrator** — Runs the agentic grep-then-read loop. Exposes three tools to the LLM: `list_files`, `grep_files`, `read_file`. Loops until the model produces an answer.
-- **Chat API** — Accepts user questions, drives the orchestrator, streams tokens and citations back to the frontend.
+## Components (single Node process)
 
-### Frontend
+- **KB Service** — CRUD on markdown files on disk. Owns the KB directory and the derived in-memory index (filename + first heading).
+- **LLM Gateway** — Thin wrapper around the OpenAI-compatible chat / tool-use API. Because DeepSeek, OpenAI, Ollama, LM Studio, vLLM, etc. all speak the same protocol, a single client with a configurable `baseURL` and `apiKey` covers them all.
+- **Retrieval Orchestrator** — Runs the agentic grep-then-read loop. Exposes three tools to the LLM: `list_files`, `grep_files`, `read_file`. Loops until the model produces a final answer.
+- **Chat API** — Accepts user questions, drives the orchestrator, streams tokens and citations back to the frontend via SSE.
+
+## Frontend
 
 - **Browser** — Lists KB files with titles; preview in place.
 - **Editor** — Markdown editor for create / update / delete.
-- **Chat** — Conversational UI that renders streamed answers and citation links back to source files.
+- **Chat** — Streams answers and renders citation links back to source files.
 
 ## Data flow — query
 
@@ -26,12 +28,24 @@
 
 1. Frontend calls a KB Service endpoint (create / update / delete).
 2. Service writes the file to disk and refreshes that entry in the in-memory index.
-3. The next query automatically sees the updated file — there is no separate reindex step.
+3. The next query sees the updated file immediately — no separate reindex step.
 
-## Proposed tech defaults (non-binding)
+## Stack
 
-- Backend: Python + FastAPI (mature LLM SDK ecosystem).
-- Frontend: React plus a markdown editor library (e.g. Milkdown, CodeMirror).
-- Storage: plain files under a `kb/` directory; optionally Git-backed for history.
+- **Runtime**: Node.js (LTS), TypeScript.
+- **Server**: Hono — tiny, first-class SSE streaming (`streamSSE`), zero-config TypeScript.
+- **LLM client**: the `openai` npm package, pointed at DeepSeek's base URL by default.
+- **Frontend**: Vite + React + TypeScript, built to static files and served by the same Node process.
+- **Storage**: a `kb/` directory of markdown files.
 
-These are defaults for getting started; nothing in the architecture above depends on a specific framework.
+## Run model
+
+- `npm run dev` during development (Vite dev server + Node server with HMR).
+- `npm run build && npm start` for local use (single Node process on `http://localhost:PORT`).
+
+## Explicitly out of scope
+
+- Authentication, authorization, multi-user support.
+- Containers, orchestration, CI/CD, observability stacks.
+- Chat history persistence, audit logs, metrics, rate limiting.
+- RAG, embeddings, vector databases.

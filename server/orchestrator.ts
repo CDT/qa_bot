@@ -52,11 +52,13 @@ const tools: ChatCompletionTool[] = [
   },
 ];
 
-const SYSTEM_PROMPT = `You are a helpful QA assistant. Answer the user's question using only the knowledge base provided through the tools.
+const SYSTEM_PROMPT = `You are a helpful QA assistant with access to a knowledge base of markdown files.
 
-Workflow:
-1. Call list_files to see what exists.
-2. Use grep_files for keyword searches, or pick files by title; then call read_file for anything that looks relevant.
+For conversational messages (greetings, thanks, clarifications) that need no research, respond directly without calling any tools.
+
+For questions that require knowledge base content:
+1. Use grep_files for keyword searches, or list_files to browse what exists.
+2. Call read_file for any file that looks relevant.
 3. Answer in the same language as the user's question.
 4. At the end of your answer, list the file paths you actually used.
 
@@ -132,6 +134,7 @@ export function createOrchestrator(
           if (!delta) continue;
           if (delta.content) {
             assistantText += delta.content;
+            await events.onToken(delta.content);
           }
           if (delta.tool_calls) {
             for (const tc of delta.tool_calls) {
@@ -147,11 +150,10 @@ export function createOrchestrator(
 
         const calls = Object.values(callBuf);
         if (calls.length === 0) {
-          // Final step — no tool calls, emit the answer now
-          if (assistantText) await events.onToken(assistantText);
+          // Final step — tokens already streamed in real-time above
           return;
         }
-        // Intermediate step — assistantText is thinking text, discard it
+        // Intermediate step — any assistantText already emitted; tool calls follow
 
         messages.push({
           role: "assistant",

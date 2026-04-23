@@ -21,19 +21,34 @@ An in-memory list of `{ path, title }` tuples, held by the Node process.
 - Updated in place on each write / delete.
 - Passed to the LLM via the `list_files` tool — small enough to fit in one prompt for any practical personal KB.
 
-## ChatMessage (ephemeral)
+## ChatSession (localStorage)
 
-Not persisted. A turn:
+Persisted in the browser via `localStorage` under the key `chat_sessions` as a JSON array. Each session:
 
 ```
 {
-  role: "user" | "assistant",
-  content: string,
-  citations?: string[]   // KB paths the model reported using
+  id:        string,   // crypto.randomUUID()
+  title:     string,   // First user message, truncated to 50 chars
+  messages:  Msg[],    // Full message history (see Msg type below)
+  updatedAt: number    // Date.now() — used for ordering
 }
 ```
 
-History lives in client state for the session.
+Sessions are ordered newest-first in the sidebar chat list. Deleting a session removes it from `localStorage` immediately.
+
+## Msg (within ChatSession)
+
+```
+{
+  role:       "user" | "assistant",
+  content:    string,
+  citations?: string[],      // KB paths the model cited
+  toolCalls?: ToolCall[],    // Tool calls made by the model (display only)
+  error?:     string
+}
+```
+
+Only `role` and `content` are sent to the server on each request — the rich fields are client-side display metadata.
 
 ## No database
 
@@ -41,6 +56,6 @@ Deliberately:
 
 - KB = filesystem.
 - Index = derived, in-memory.
-- Chat history = client-side only.
+- Chat history = browser `localStorage` (client-side only, no server).
 
-Introduce persistence only if a concrete requirement forces it.
+Introduce server-side persistence only if a concrete requirement forces it.

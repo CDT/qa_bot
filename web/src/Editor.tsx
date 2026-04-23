@@ -21,7 +21,7 @@ export function Editor({
       setContent("");
       return;
     }
-    fetch(`/api/kb/files/${encodeURIComponent(path)}`)
+    fetch(`/api/kb/files/${path}`)
       .then(async (r) => {
         if (!r.ok) throw new Error(`failed to load: ${r.status}`);
         return (await r.json()) as { content: string };
@@ -39,7 +39,7 @@ export function Editor({
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch(`/api/kb/files/${encodeURIComponent(target)}`, {
+      const r = await fetch(`/api/kb/files/${target}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
@@ -58,7 +58,12 @@ export function Editor({
   async function remove() {
     if (!path) return;
     if (!confirm(`Delete ${path}?`)) return;
-    await fetch(`/api/kb/files/${encodeURIComponent(path)}`, { method: "DELETE" });
+    const dr = await fetch(`/api/kb/files/${path}`, { method: "DELETE" });
+    if (!dr.ok && dr.status !== 404) {
+      const data = (await dr.json().catch(() => ({}))) as { error?: string };
+      setError(data.error ?? `delete failed: ${dr.status}`);
+      return;
+    }
     await onDeleted();
   }
 
@@ -72,11 +77,11 @@ export function Editor({
           disabled={!!path}
           spellCheck={false}
         />
-        <button onClick={save} disabled={busy}>
+        <button onClick={save} disabled={busy} className="btn-save">
           {busy ? "Saving…" : "Save"}
         </button>
         {path && (
-          <button onClick={remove} className="danger">
+          <button onClick={remove} className="btn-delete">
             Delete
           </button>
         )}

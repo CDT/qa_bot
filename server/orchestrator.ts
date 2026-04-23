@@ -132,7 +132,6 @@ export function createOrchestrator(
           if (!delta) continue;
           if (delta.content) {
             assistantText += delta.content;
-            await events.onToken(delta.content);
           }
           if (delta.tool_calls) {
             for (const tc of delta.tool_calls) {
@@ -147,7 +146,12 @@ export function createOrchestrator(
         }
 
         const calls = Object.values(callBuf);
-        if (calls.length === 0) return;
+        if (calls.length === 0) {
+          // Final step — no tool calls, emit the answer now
+          if (assistantText) await events.onToken(assistantText);
+          return;
+        }
+        // Intermediate step — assistantText is thinking text, discard it
 
         messages.push({
           role: "assistant",

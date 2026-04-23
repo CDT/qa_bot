@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 
 type ToolCall = { name: string; args: unknown };
 
-type Msg = {
+export type Msg = {
   role: "user" | "assistant";
   content: string;
   citations?: string[];
@@ -10,17 +11,36 @@ type Msg = {
   error?: string;
 };
 
-export function Chat() {
-  const [messages, setMessages] = useState<Msg[]>([]);
+export function Chat({
+  onOpenFile,
+  initialMessages = [],
+  onUpdate,
+}: {
+  onOpenFile?: (path: string) => void;
+  initialMessages?: Msg[];
+  onUpdate?: (messages: Msg[]) => void;
+}) {
+  const [messages, setMessages] = useState<Msg[]>(initialMessages);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef(messages);
+  const prevBusyRef = useRef(false);
+
+  messagesRef.current = messages;
 
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (prevBusyRef.current && !busy && messagesRef.current.length > 0) {
+      onUpdate?.(messagesRef.current);
+    }
+    prevBusyRef.current = busy;
+  }, [busy, onUpdate]);
 
   async function send() {
     const text = input.trim();
@@ -68,10 +88,7 @@ export function Chat() {
             patchLast((m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), tc] }));
           } else if (ev.event === "citation") {
             const p = JSON.parse(ev.data) as string;
-            patchLast((m) => ({
-              ...m,
-              citations: [...(m.citations ?? []), p],
-            }));
+            patchLast((m) => ({ ...m, citations: [...(m.citations ?? []), p] }));
           } else if (ev.event === "error") {
             const msg = JSON.parse(ev.data) as string;
             patchLast((m) => ({ ...m, error: msg }));
@@ -85,54 +102,93 @@ export function Chat() {
     }
   }
 
+  const showDots =
+    busy &&
+    messages[messages.length - 1]?.role === "assistant" &&
+    !messages[messages.length - 1]?.content;
+
   return (
     <div className="chat">
       <div className="chat-log" ref={logRef}>
         {messages.length === 0 && (
-          <div className="empty">Ask a question about your knowledge base.</div>
+          <div className="chat-empty">
+            <div className="chat-empty-icon">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <h3>Ask your knowledge base</h3>
+            <p>The assistant will search your files and answer with citations.</p>
+          </div>
         )}
+
         {messages.map((m, i) => (
           <div key={i} className={`msg msg-${m.role}`}>
-            {m.toolCalls && m.toolCalls.length > 0 && (
-              <div className="tool-calls">
-                {m.toolCalls.map((tc, j) => (
-                  <div key={j} className="tool-call">
-                    → {tc.name}({JSON.stringify(tc.args)})
+            {m.role === "user" ? (
+              <div className="bubble">{m.content}</div>
+            ) : (
+              <>
+                {m.toolCalls && m.toolCalls.length > 0 && (
+                  <div className="tool-calls">
+                    {m.toolCalls.map((tc, j) => (
+                      <div key={j} className="tool-call">
+                        <span className="tool-call-arrow">→</span>
+                        <span className="tool-call-name">{tc.name}</span>
+                        <span className="tool-call-args">({JSON.stringify(tc.args)})</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+                {m.content && (
+                  <div className="msg-body msg-markdown">
+                    <ReactMarkdown>{m.content}</ReactMarkdown>
+                  </div>
+                )}
+                {m.citations && m.citations.length > 0 && (
+                  <div className="citations">
+                    <span className="citations-label">Sources</span>
+                    {m.citations.map((c, j) => (
+                      <button
+                        key={j}
+                        className="citation"
+                        onClick={() => onOpenFile?.(c)}
+                        title="Open in editor"
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {m.error && <div className="error">{m.error}</div>}
+              </>
             )}
-            {m.content && <div className="msg-body">{m.content}</div>}
-            {m.citations && m.citations.length > 0 && (
-              <div className="citations">
-                Sources:{" "}
-                {m.citations.map((c, j) => (
-                  <span key={j} className="citation">
-                    {c}
-                    {j < m.citations!.length - 1 ? ", " : ""}
-                  </span>
-                ))}
-              </div>
-            )}
-            {m.error && <div className="error">{m.error}</div>}
           </div>
         ))}
+
+        {showDots && (
+          <div className="msg msg-assistant streaming-indicator">
+            <span className="dot" /><span className="dot" /><span className="dot" />
+          </div>
+        )}
       </div>
+
       <div className="chat-input">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask anything… (Enter to send, Shift+Enter for newline)"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-        />
-        <button onClick={send} disabled={busy || !input.trim()}>
-          {busy ? "…" : "Send"}
-        </button>
+        <div className="chat-input-inner">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask anything… (Enter to send, Shift+Enter for newline)"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+          />
+          <button className="chat-send-btn" onClick={send} disabled={busy || !input.trim()}>
+            {busy ? "…" : "Send"}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -16,6 +16,7 @@ Personal internal tool — optimize for the smallest number of obvious moving pa
 - **Browser** — Lists KB files with titles; preview in place.
 - **Editor** — Markdown editor for create / update / delete.
 - **Chat** — Streams answers and renders citation links back to source files.
+- **Chat History** — Sidebar chat list backed by `localStorage`. Sessions are created automatically on first send, updated after each response, and listed newest-first. No server involvement — all persistence is client-side.
 
 ## Data flow — query
 
@@ -47,5 +48,5 @@ Personal internal tool — optimize for the smallest number of obvious moving pa
 
 - Authentication, authorization, multi-user support.
 - Containers, orchestration, CI/CD, observability stacks.
-- Chat history persistence, audit logs, metrics, rate limiting.
+- Server-side chat history persistence, audit logs, metrics, rate limiting.
 - RAG, embeddings, vector databases.
